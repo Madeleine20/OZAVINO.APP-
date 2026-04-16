@@ -1,0 +1,904 @@
+import javax.swing.*;
+import javax.swing.plaf.basic.BasicScrollBarUI;
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.geom.RoundRectangle2D;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
+public class OzavinoApp extends JFrame {
+
+    // PALETTE AFROCENTRÉE - Version fond beige
+    Color fond = new Color(240, 235, 220);       // #F0EBDC - Fond beige
+    Color ciel = new Color(26, 60, 94);          // #1A3C5E - Bleu profond
+    Color acacia = new Color(212, 163, 115);     // #D4A373 - Doré
+    Color argile = new Color(204, 90, 32);       // #CC5A20 - Terre cuite
+    Color nuit = new Color(13, 27, 42);          // #0D1B2A - Bleu nuit
+    Color kola = new Color(92, 58, 33);          // #5C3A21 - Marron
+    Color texteClair = new Color(245, 230, 211); // Pour fonds foncés
+    Color texteFonce = new Color(50, 35, 25);    // Pour fond clair
+    Color rosehip = new Color(121, 35, 24);      // #792318 - Pour suppression
+
+    CardLayout cardLayout = new CardLayout();
+    JPanel mainContent = new JPanel(cardLayout);
+    JLabel topBanner = new JLabel();
+    JLabel sideBanner = new JLabel();
+
+    // SYSTÈME DE TRADUCTION
+    private Map<String, String[]> dico = new HashMap<>();
+    private String langueActuelle = "FR";
+    
+    // GESTION DE LA CONNEXION
+    private boolean estConnecte = false;
+    private String nomUtilisateur = "";
+    
+    // Données dynamiques de la page compte
+    private ArrayList<String[]> lecturesEnCours; // [titre, progression]
+    private ArrayList<String> aLire;
+    private ArrayList<String> objectifs;
+    private String userEmail;
+    private String userInspirations;
+
+    public OzavinoApp() {
+        // Initialisation des données compte
+        lecturesEnCours = new ArrayList<>();
+        lecturesEnCours.add(new String[]{"Maame - Jessica George", "65"});
+        lecturesEnCours.add(new String[]{"Happy Place - Emily Henry", "30"});
+
+        aLire = new ArrayList<>();
+        aLire.add("All About Love - Bell Hooks");
+        aLire.add("The Secret History - Donna Tartt");
+        aLire.add("On Earth We're Briefly Gorgeous");
+
+        objectifs = new ArrayList<>();
+        objectifs.add("Lire 5 livres par mois");
+        objectifs.add("100 livres cette année");
+        objectifs.add("Lire plus de classiques");
+        objectifs.add("Découvrir de nouveaux auteurs");
+
+        userEmail = "user@ozavino.com";
+        userInspirations = "Littérature, Art, Histoire";
+
+        remplirDico();
+        setTitle("OZAVINO - Bibliothèque Universelle");
+        setSize(1200, 800);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+
+        // HEADER
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(nuit);
+
+        topBanner.setHorizontalAlignment(SwingConstants.CENTER);
+        header.add(topBanner, BorderLayout.CENTER);
+
+        // MENU
+        JPanel menuPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 30, 5));
+        menuPanel.setBackground(nuit);
+
+        menuPanel.add(createMenuBtn(t("accueil"), "images/menu_recherches.png.jpg", "Accueil")); 
+        menuPanel.add(createMenuBtn(t("compte"), "images/menu_compte.pnj.jpg", "Compte"));
+        menuPanel.add(createMenuBtn(t("categories"), "images/menu_categories.png.jpg", "Catégories"));
+
+        // BARRE DE RECHERCHE
+        JTextField searchField = new JTextField(15);
+        searchField.setBackground(texteClair);
+        searchField.setForeground(kola);
+        searchField.setBorder(BorderFactory.createLineBorder(argile, 2));
+        menuPanel.add(searchField);
+
+        JButton searchBtn = new JButton("🔍");
+        searchBtn.setContentAreaFilled(false);
+        searchBtn.setBorderPainted(false);
+        searchBtn.setForeground(texteClair);
+        searchBtn.addActionListener(e -> {
+            String query = searchField.getText().toLowerCase().trim();
+            String[] cats = {"LITTÉRATURE & FICTION", "HISTOIRE & CIVILISATION", "SOCIÉTÉ & FÉMINISME", "ARTS, MUSIQUE & CULTURE", "ENTREPRENEURIAT", "JEUNESSE"};
+            boolean trouve = false;
+            for (String cat : cats) {
+                if (cat.toLowerCase().contains(query)) {
+                    mainContent.add(createPageDetails("Résultat : " + cat), "SearchRes");
+                    cardLayout.show(mainContent, "SearchRes");
+                    trouve = true;
+                    break;
+                }
+            }
+            if (!trouve) JOptionPane.showMessageDialog(OzavinoApp.this, t("aucun_resultat") + " : " + query);
+        });
+        menuPanel.add(searchBtn);
+
+        // LANGUES
+        JLabel langLabel = new JLabel(t("langues") + " : ");
+        langLabel.setForeground(texteClair);
+        menuPanel.add(langLabel);
+
+        String[] languages = {"FR", "EN", "ES"};
+        JComboBox<String> langBox = new JComboBox<>(languages);
+        langBox.addActionListener(e -> {
+            langueActuelle = (String)langBox.getSelectedItem();
+            traduireApplication();
+        });
+        menuPanel.add(langBox);
+
+        header.add(menuPanel, BorderLayout.SOUTH);
+
+        // SCROLLPANE MODERNE
+        JScrollPane scrollPane = new JScrollPane(mainContent);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.setBackground(fond);
+        
+        scrollPane.getVerticalScrollBar().setUI(new BasicScrollBarUI() {
+            @Override
+            protected void configureScrollBarColors() {
+                this.thumbColor = new Color(212, 163, 115, 150);
+                this.trackColor = new Color(0, 0, 0, 0);
+            }
+            @Override
+            protected JButton createDecreaseButton(int orientation) {
+                JButton button = new JButton();
+                button.setPreferredSize(new Dimension(0, 0));
+                return button;
+            }
+            @Override
+            protected JButton createIncreaseButton(int orientation) {
+                JButton button = new JButton();
+                button.setPreferredSize(new Dimension(0, 0));
+                return button;
+            }
+            @Override
+            protected void paintThumb(Graphics g, JComponent c, Rectangle thumbBounds) {
+                if (thumbBounds.isEmpty()) return;
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(212, 163, 115, 180));
+                g2.fillRoundRect(thumbBounds.x, thumbBounds.y, thumbBounds.width, thumbBounds.height, 10, 10);
+                g2.dispose();
+            }
+        });
+        scrollPane.getViewport().setBackground(fond);
+        
+        setLayout(new BorderLayout());
+        add(header, BorderLayout.NORTH);
+        add(sideBanner, BorderLayout.WEST);
+        add(scrollPane, BorderLayout.CENTER);
+
+        // PAGES
+        mainContent.add(createPageAccueil(), "Accueil");
+        mainContent.add(createPageCategories(), "Catégories");
+        mainContent.add(createPageConnexion(), "Connexion");
+        mainContent.add(createPageCompte(), "Compte");
+
+        updateDisplay("Accueil");
+    }
+
+    // PAGE DE CONNEXION (inchangée)
+    private JPanel createPageConnexion() {
+        JPanel p = new JPanel(null);
+        p.setBackground(fond);
+        p.setPreferredSize(new Dimension(900, 600));
+
+        JPanel loginPanel = new JPanel(null);
+        loginPanel.setBackground(kola);
+        loginPanel.setBounds(250, 150, 400, 300);
+        loginPanel.setBorder(BorderFactory.createLineBorder(acacia, 2));
+        
+        JLabel titleLabel = new JLabel(t("connexion_titre"), SwingConstants.CENTER);
+        titleLabel.setForeground(acacia);
+        titleLabel.setFont(new Font("Serif", Font.BOLD, 24));
+        titleLabel.setBounds(0, 30, 400, 40);
+        loginPanel.add(titleLabel);
+        
+        JLabel userLabel = new JLabel(t("nom_utilisateur") + " :");
+        userLabel.setForeground(texteClair);
+        userLabel.setBounds(50, 100, 120, 25);
+        loginPanel.add(userLabel);
+        
+        JTextField userField = new JTextField();
+        userField.setBounds(180, 100, 170, 25);
+        userField.setBackground(texteClair);
+        loginPanel.add(userField);
+        
+        JLabel passLabel = new JLabel(t("mot_de_passe") + " :");
+        passLabel.setForeground(texteClair);
+        passLabel.setBounds(50, 150, 120, 25);
+        loginPanel.add(passLabel);
+        
+        JPasswordField passField = new JPasswordField();
+        passField.setBounds(180, 150, 170, 25);
+        passField.setBackground(texteClair);
+        loginPanel.add(passField);
+        
+        JButton loginBtn = new JButton(t("se_connecter"));
+        loginBtn.setBackground(argile);
+        loginBtn.setForeground(Color.WHITE);
+        loginBtn.setBorderPainted(false);
+        loginBtn.setBounds(150, 210, 100, 35);
+        loginBtn.addActionListener(e -> {
+            String user = userField.getText().trim();
+            String pass = new String(passField.getPassword());
+            
+            if (user.isEmpty()) {
+                JOptionPane.showMessageDialog(p, t("entrer_nom"));
+            } else if (pass.isEmpty()) {
+                JOptionPane.showMessageDialog(p, t("entrer_mdp"));
+            } else {
+                estConnecte = true;
+                nomUtilisateur = user;
+                JOptionPane.showMessageDialog(p, t("bienvenue") + " " + user + " !");
+                mainContent.add(createPageCompte(), "Compte");
+                cardLayout.show(mainContent, "Compte");
+            }
+        });
+        loginPanel.add(loginBtn);
+        
+        p.add(loginPanel);
+        return p;
+    }
+
+    // PAGE ACCUEIL (inchangée)
+    private JPanel createPageAccueil() {
+        JPanel p = new JPanel(null);
+        p.setBackground(fond);
+        p.setPreferredSize(new Dimension(900, 700));
+
+        // Bloc de gauche (Nouveautés, Recommandations, Évènements)
+        JPanel rect = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(kola);
+                g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 30, 30));
+                g2.dispose();
+            }
+        };
+        rect.setOpaque(false);
+        rect.setLayout(new BoxLayout(rect, BoxLayout.Y_AXIS));
+        rect.setBounds(30, 20, 280, 600);
+        rect.setBorder(BorderFactory.createEmptyBorder(20, 25, 20, 20));
+
+        addSection(rect, t("nouveautes"), new String[]{t("livres_recents"), t("actualite"), t("disponibilites")});
+        addSection(rect, t("recommandations"), new String[]{t("auteur_interessant"), t("artiste_prometteur"), t("selection_staff")});
+        addSection(rect, t("evenements"), new String[]{t("groupes_lecture"), t("dedicaces"), t("masterclass")});
+
+        p.add(rect);
+
+        // Section centrale - Livres populaires
+        JPanel centerPanel = new JPanel(null);
+        centerPanel.setBackground(kola);
+        centerPanel.setBounds(340, 20, 520, 500);
+        centerPanel.setBorder(BorderFactory.createLineBorder(acacia, 1));
+        
+        JLabel popularTitle = new JLabel(t("populaires"));
+        popularTitle.setForeground(acacia);
+        popularTitle.setFont(new Font("Serif", Font.BOLD, 20));
+        popularTitle.setBounds(10, 10, 200, 30);
+        centerPanel.add(popularTitle);
+        
+        String[] popularBooks = {"Fairy Tale - Stephen King", "Klara and the Sun - Kazuo Ishiguro", "Never After - Stephanie Gilbert"};
+        for (int i = 0; i < popularBooks.length; i++) {
+            JLabel book = new JLabel("📚 " + popularBooks[i]);
+            book.setForeground(texteClair);
+            book.setFont(new Font("Serif", Font.PLAIN, 14));
+            book.setBounds(20, 50 + i * 40, 500, 30);
+            book.setCursor(new Cursor(Cursor.HAND_CURSOR));
+            final String bookTitle = popularBooks[i];
+            book.addMouseListener(new MouseAdapter() {
+                public void mouseClicked(MouseEvent e) {
+                    mainContent.add(createPageDetails(bookTitle), "Detail_" + bookTitle);
+                    cardLayout.show(mainContent, "Detail_" + bookTitle);
+                }
+            });
+            centerPanel.add(book);
+        }
+        
+        // Citation
+        JLabel quote = new JLabel("<html><center>\"libraries are full of ideas -<br>perhaps the most dangerous<br>and powerful of all weapons\"</center></html>");
+        quote.setForeground(acacia);
+        quote.setFont(new Font("Serif", Font.ITALIC, 14));
+        quote.setBounds(20, 220, 480, 100);
+        centerPanel.add(quote);
+        
+        p.add(centerPanel);
+        
+        // Lien Spotify
+        try {
+            JLabel spotifyLabel = new JLabel();
+            ImageIcon spotifyImg = new ImageIcon(new ImageIcon("images/music_page1.jpg").getImage().getScaledInstance(180, 80, Image.SCALE_SMOOTH));
+            spotifyLabel.setIcon(spotifyImg);
+            spotifyLabel.setBounds(380, 550, 180, 80);
+            spotifyLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+            spotifyLabel.addMouseListener(new MouseAdapter() {
+                public void mouseClicked(MouseEvent e) {
+                    try {
+                        Desktop.getDesktop().browse(new URI("https://open.spotify.com/playlist/1MkCR8odOrFM4QOZ2QKF7w?si=saLzrlChTuuTG8wPNwzhPw"));
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(null, t("erreur_ouverture"));
+                    }
+                }
+            });
+            p.add(spotifyLabel);
+        } catch (Exception e) {}
+
+        return p;
+    }
+    
+    private void addSection(JPanel parent, String titre, String[] items) {
+        JLabel t = new JLabel(titre);
+        t.setForeground(acacia); 
+        t.setFont(new Font("Serif", Font.BOLD, 18));
+        parent.add(t);
+        parent.add(Box.createVerticalStrut(5));
+        
+        for (String item : items) {
+            JLabel link = new JLabel("• " + item);
+            link.setForeground(texteClair);
+            link.setFont(new Font("Serif", Font.PLAIN, 13));
+            link.setCursor(new Cursor(Cursor.HAND_CURSOR));
+            link.addMouseListener(new MouseAdapter() {
+                public void mouseClicked(MouseEvent e) {
+                    mainContent.add(createPageDetails(item), "Detail_" + item);
+                    cardLayout.show(mainContent, "Detail_" + item);
+                }
+            });
+            parent.add(link);
+            parent.add(Box.createVerticalStrut(8));
+        }
+        parent.add(Box.createVerticalStrut(25));
+    }
+
+    // PAGE CATEGORIES (inchangée)
+    private JPanel createPageCategories() {
+        JPanel p = new JPanel(new GridLayout(2, 3, 20, 20));
+        p.setBackground(fond);
+        p.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
+        p.setPreferredSize(new Dimension(900, 700));
+
+        String[] cats = {
+            "LITTÉRATURE & FICTION", "HISTOIRE & CIVILISATION", "SOCIÉTÉ & FÉMINISME",
+            "ARTS, MUSIQUE & CULTURE", "ENTREPRENEURIAT & LEADERSHIP", "JEUNESSE, CONTES & LÉGENDAIRES"
+        };
+        
+        String[] imgFiles = {
+            "cat_literature&fiction.png.jpg", "cat_histoire&civilisation.png.jpg", "cat_société&feminisme.png.jpg", 
+            "cat_art,musique&culture.PNG.jpg", "cat_entreprenariat&leadership.png.jpg", "cat_jeunesse,conte&legende.png.jpg"
+        };
+
+        for (int i = 0; i < cats.length; i++) {
+            String c = cats[i];
+            JPanel card = new JPanel(new BorderLayout());
+            card.setBackground(kola);
+            card.setBorder(BorderFactory.createLineBorder(acacia, 1));
+            
+            try {
+                ImageIcon catIcon = new ImageIcon(new ImageIcon("images/" + imgFiles[i])
+                                     .getImage().getScaledInstance(120, 120, Image.SCALE_SMOOTH));
+                JLabel imgLabel = new JLabel(catIcon);
+                imgLabel.setHorizontalAlignment(SwingConstants.CENTER);
+                card.add(imgLabel, BorderLayout.CENTER);
+            } catch (Exception e) {
+                JLabel placeholder = new JLabel("📚", SwingConstants.CENTER);
+                placeholder.setFont(new Font("Serif", Font.PLAIN, 60));
+                placeholder.setForeground(acacia);
+                card.add(placeholder, BorderLayout.CENTER);
+            }
+
+            JLabel labelText = new JLabel("<html><center>" + c + "</center></html>", SwingConstants.CENTER);
+            labelText.setFont(new Font("Serif", Font.BOLD, 12));
+            labelText.setForeground(texteClair);
+            card.add(labelText, BorderLayout.NORTH);
+
+            JButton b = new JButton(t("explorer"));
+            b.setBackground(argile);
+            b.setForeground(Color.WHITE);
+            b.setBorderPainted(false);
+            b.addActionListener(e -> {
+                mainContent.add(createPageDetails(c), "Cat_" + c);
+                cardLayout.show(mainContent, "Cat_" + c);
+            });
+            card.add(b, BorderLayout.SOUTH);
+            p.add(card);
+        }
+        return p;
+    }
+
+    // PAGE COMPTE AMÉLIORÉE (avec édition complète)
+    private JPanel createPageCompte() {
+        JPanel p = new JPanel(null);
+        p.setBackground(fond);
+        p.setPreferredSize(new Dimension(900, 900));
+
+        if (!estConnecte) {
+            JPanel notConnectedPanel = new JPanel(null);
+            notConnectedPanel.setBackground(kola);
+            notConnectedPanel.setBounds(200, 200, 500, 200);
+            notConnectedPanel.setBorder(BorderFactory.createLineBorder(acacia, 2));
+            
+            JLabel message = new JLabel(t("non_connecte"), SwingConstants.CENTER);
+            message.setForeground(acacia);
+            message.setFont(new Font("Serif", Font.BOLD, 18));
+            message.setBounds(0, 50, 500, 40);
+            notConnectedPanel.add(message);
+            
+            JButton loginBtn = new JButton(t("se_connecter"));
+            loginBtn.setBackground(argile);
+            loginBtn.setForeground(Color.WHITE);
+            loginBtn.setBorderPainted(false);
+            loginBtn.setBounds(200, 120, 100, 35);
+            loginBtn.addActionListener(e -> cardLayout.show(mainContent, "Connexion"));
+            notConnectedPanel.add(loginBtn);
+            
+            p.add(notConnectedPanel);
+            return p;
+        }
+
+        // ========== PANEL UTILISATEUR ==========
+        JPanel userPanel = new JPanel(null);
+        userPanel.setBackground(kola);
+        userPanel.setBounds(50, 20, 800, 180);
+        userPanel.setBorder(BorderFactory.createLineBorder(acacia, 1));
+        
+        JLabel welcomeLabel = new JLabel(t("bienvenue") + ", " + nomUtilisateur + " !");
+        welcomeLabel.setForeground(acacia);
+        welcomeLabel.setFont(new Font("Serif", Font.BOLD, 20));
+        welcomeLabel.setBounds(30, 20, 400, 30);
+        userPanel.add(welcomeLabel);
+        
+        // Bouton d'édition du profil (crayon)
+        JButton editProfileBtn = new JButton("✎");
+        editProfileBtn.setBackground(argile);
+        editProfileBtn.setForeground(Color.WHITE);
+        editProfileBtn.setBorderPainted(false);
+        editProfileBtn.setFont(new Font("Serif", Font.BOLD, 14));
+        editProfileBtn.setBounds(440, 20, 40, 30);
+        editProfileBtn.addActionListener(e -> editerProfil());
+        userPanel.add(editProfileBtn);
+        
+        JLabel lblNom = new JLabel("• " + t("nom") + " :");
+        lblNom.setForeground(acacia);
+        lblNom.setBounds(30, 60, 100, 25);
+        userPanel.add(lblNom);
+        
+        JLabel valNom = new JLabel(nomUtilisateur);
+        valNom.setForeground(texteClair);
+        valNom.setBounds(150, 60, 300, 25);
+        userPanel.add(valNom);
+        
+        JLabel lblEmail = new JLabel("• " + t("email") + " :");
+        lblEmail.setForeground(acacia);
+        lblEmail.setBounds(30, 95, 100, 25);
+        userPanel.add(lblEmail);
+        
+        JLabel valEmail = new JLabel(userEmail);
+        valEmail.setForeground(texteClair);
+        valEmail.setBounds(150, 95, 300, 25);
+        userPanel.add(valEmail);
+        
+        JLabel lblInsp = new JLabel("• " + t("inspirations") + " :");
+        lblInsp.setForeground(acacia);
+        lblInsp.setBounds(30, 130, 150, 25);
+        userPanel.add(lblInsp);
+        
+        JLabel valInsp = new JLabel(userInspirations);
+        valInsp.setForeground(texteClair);
+        valInsp.setBounds(150, 130, 500, 25);
+        userPanel.add(valInsp);
+        
+        p.add(userPanel);
+
+        // ========== LECTURE EN COURS ==========
+        JPanel readingPanel = new JPanel(null);
+        readingPanel.setBackground(kola);
+        readingPanel.setBounds(50, 220, 380, 250);
+        readingPanel.setBorder(BorderFactory.createLineBorder(acacia, 1));
+        
+        JLabel readingTitle = new JLabel(t("lecture_cours"));
+        readingTitle.setForeground(acacia);
+        readingTitle.setFont(new Font("Serif", Font.BOLD, 16));
+        readingTitle.setBounds(15, 15, 350, 25);
+        readingPanel.add(readingTitle);
+        
+        int yOffset = 50;
+        for (int i = 0; i < lecturesEnCours.size(); i++) {
+            String[] livre = lecturesEnCours.get(i);
+            JLabel book = new JLabel("📚 " + livre[0]);
+            book.setForeground(texteClair);
+            book.setBounds(15, yOffset, 250, 25);
+            readingPanel.add(book);
+            
+            JProgressBar progress = new JProgressBar(0, 100);
+            progress.setValue(Integer.parseInt(livre[1]));
+            progress.setBounds(15, yOffset + 30, 280, 15);
+            progress.setBackground(fond);
+            progress.setForeground(argile);
+            readingPanel.add(progress);
+            
+            JButton editBtn = new JButton("✎");
+            editBtn.setBackground(argile);
+            editBtn.setForeground(Color.WHITE);
+            editBtn.setBorderPainted(false);
+            editBtn.setBounds(300, yOffset, 40, 25);
+            final int idx = i;
+            editBtn.addActionListener(e -> editerLectureEnCours(idx));
+            readingPanel.add(editBtn);
+            
+            yOffset += 70;
+        }
+        p.add(readingPanel);
+
+        // ========== À LIRE ==========
+        JPanel toReadPanel = new JPanel(null);
+        toReadPanel.setBackground(kola);
+        toReadPanel.setBounds(470, 220, 380, 250);
+        toReadPanel.setBorder(BorderFactory.createLineBorder(acacia, 1));
+        
+        JLabel toReadTitle = new JLabel(t("a_lire_titre"));
+        toReadTitle.setForeground(acacia);
+        toReadTitle.setFont(new Font("Serif", Font.BOLD, 16));
+        toReadTitle.setBounds(15, 15, 350, 25);
+        toReadPanel.add(toReadTitle);
+        
+        yOffset = 50;
+        for (int i = 0; i < aLire.size(); i++) {
+            String livre = aLire.get(i);
+            JLabel book = new JLabel("⭐ " + livre);
+            book.setForeground(texteClair);
+            book.setBounds(15, yOffset, 260, 25);
+            toReadPanel.add(book);
+            
+            JButton editBtn = new JButton("✎");
+            editBtn.setBackground(argile);
+            editBtn.setForeground(Color.WHITE);
+            editBtn.setBorderPainted(false);
+            editBtn.setBounds(280, yOffset, 40, 25);
+            final int idx = i;
+            editBtn.addActionListener(e -> editerALire(idx));
+            toReadPanel.add(editBtn);
+            
+            JButton delBtn = new JButton("🗑");
+            delBtn.setBackground(rosehip);
+            delBtn.setForeground(Color.WHITE);
+            delBtn.setBorderPainted(false);
+            delBtn.setBounds(325, yOffset, 40, 25);
+            delBtn.addActionListener(e -> supprimerALire(idx));
+            toReadPanel.add(delBtn);
+            
+            yOffset += 40;
+        }
+        // Bouton ajouter
+        JButton addBookBtn = new JButton("+ " + t("ajouter_livre"));
+        addBookBtn.setBackground(argile);
+        addBookBtn.setForeground(Color.WHITE);
+        addBookBtn.setBorderPainted(false);
+        addBookBtn.setBounds(15, yOffset + 10, 150, 30);
+        addBookBtn.addActionListener(e -> ajouterALire());
+        toReadPanel.add(addBookBtn);
+        
+        p.add(toReadPanel);
+
+        // ========== OBJECTIFS DE LECTURE ==========
+        JPanel goalsPanel = new JPanel(null);
+        goalsPanel.setBackground(kola);
+        goalsPanel.setBounds(50, 490, 800, 130);
+        goalsPanel.setBorder(BorderFactory.createLineBorder(acacia, 1));
+        
+        JLabel goalsTitle = new JLabel(t("objectifs_lecture"));
+        goalsTitle.setForeground(acacia);
+        goalsTitle.setFont(new Font("Serif", Font.BOLD, 16));
+        goalsTitle.setBounds(15, 15, 300, 25);
+        goalsPanel.add(goalsTitle);
+        
+        yOffset = 50;
+        for (int i = 0; i < objectifs.size(); i++) {
+            String obj = objectifs.get(i);
+            JLabel goal = new JLabel("🎯 " + obj);
+            goal.setForeground(texteClair);
+            goal.setBounds(15 + (i % 2) * 390, yOffset + (i / 2) * 35, 350, 25);
+            goalsPanel.add(goal);
+            
+            JButton editGoalBtn = new JButton("✎");
+            editGoalBtn.setBackground(argile);
+            editGoalBtn.setForeground(Color.WHITE);
+            editGoalBtn.setBorderPainted(false);
+            editGoalBtn.setBounds(15 + (i % 2) * 390 + 300, yOffset + (i / 2) * 35, 40, 25);
+            final int idxGoal = i;
+            editGoalBtn.addActionListener(e -> editerObjectif(idxGoal));
+            goalsPanel.add(editGoalBtn);
+        }
+        p.add(goalsPanel);
+
+        // ========== BOUTONS GÉNÉRAUX ==========
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 50, 10));
+        buttonPanel.setOpaque(false);
+        buttonPanel.setBounds(200, 650, 500, 60);
+        
+        JButton modifierBtn = new JButton(t("modifier_infos"));
+        modifierBtn.setBackground(argile);
+        modifierBtn.setForeground(Color.WHITE);
+        modifierBtn.setBorderPainted(false);
+        modifierBtn.setFont(new Font("Serif", Font.BOLD, 12));
+        modifierBtn.setPreferredSize(new Dimension(200, 40));
+        modifierBtn.addActionListener(e -> editerProfil()); // même fonction que le crayon
+        
+        JButton deconnecterBtn = new JButton(t("deconnecter"));
+        deconnecterBtn.setBackground(argile);
+        deconnecterBtn.setForeground(Color.WHITE);
+        deconnecterBtn.setBorderPainted(false);
+        deconnecterBtn.setFont(new Font("Serif", Font.BOLD, 12));
+        deconnecterBtn.setPreferredSize(new Dimension(200, 40));
+        deconnecterBtn.addActionListener(e -> {
+            int confirm = JOptionPane.showConfirmDialog(p, t("confirm_deconnexion"), t("deconnexion"), JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                estConnecte = false;
+                nomUtilisateur = "";
+                JOptionPane.showMessageDialog(p, t("deconnexion_reussie"));
+                mainContent.add(createPageCompte(), "Compte");
+                cardLayout.show(mainContent, "Accueil");
+            }
+        });
+        
+        buttonPanel.add(modifierBtn);
+        buttonPanel.add(deconnecterBtn);
+        p.add(buttonPanel);
+        
+        return p;
+    }
+
+    // ========== MÉTHODES D'ÉDITION ==========
+    private void editerProfil() {
+        JPanel panel = new JPanel(new GridLayout(0, 2, 10, 10));
+        panel.setBackground(kola);
+        
+        JTextField nomField = new JTextField(nomUtilisateur);
+        JTextField emailField = new JTextField(userEmail);
+        JTextField inspirationsField = new JTextField(userInspirations);
+        
+        panel.add(new JLabel(t("nom") + " :"));
+        panel.add(nomField);
+        panel.add(new JLabel(t("email") + " :"));
+        panel.add(emailField);
+        panel.add(new JLabel(t("inspirations") + " :"));
+        panel.add(inspirationsField);
+        
+        int result = JOptionPane.showConfirmDialog(this, panel, t("modifier_profil"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION) {
+            nomUtilisateur = nomField.getText().trim();
+            userEmail = emailField.getText().trim();
+            userInspirations = inspirationsField.getText().trim();
+            // Mise à jour de l'affichage
+            mainContent.add(createPageCompte(), "Compte");
+            cardLayout.show(mainContent, "Compte");
+        }
+    }
+
+    private void editerLectureEnCours(int index) {
+        String[] livre = lecturesEnCours.get(index);
+        JPanel panel = new JPanel(new GridLayout(0, 2, 10, 10));
+        panel.setBackground(kola);
+        
+        JTextField titreField = new JTextField(livre[0]);
+        JSlider progressionSlider = new JSlider(0, 100, Integer.parseInt(livre[1]));
+        progressionSlider.setPaintTicks(true);
+        progressionSlider.setPaintLabels(true);
+        progressionSlider.setMajorTickSpacing(25);
+        progressionSlider.setMinorTickSpacing(5);
+        
+        panel.add(new JLabel("Titre :"));
+        panel.add(titreField);
+        panel.add(new JLabel("Progression (%) :"));
+        panel.add(progressionSlider);
+        
+        int result = JOptionPane.showConfirmDialog(this, panel, "Modifier le livre", JOptionPane.OK_CANCEL_OPTION);
+        if (result == JOptionPane.OK_OPTION) {
+            lecturesEnCours.set(index, new String[]{titreField.getText(), String.valueOf(progressionSlider.getValue())});
+            mainContent.add(createPageCompte(), "Compte");
+            cardLayout.show(mainContent, "Compte");
+        }
+    }
+
+    private void editerALire(int index) {
+        String nouveauTitre = JOptionPane.showInputDialog(this, "Nouveau titre :", aLire.get(index));
+        if (nouveauTitre != null && !nouveauTitre.trim().isEmpty()) {
+            aLire.set(index, nouveauTitre.trim());
+            mainContent.add(createPageCompte(), "Compte");
+            cardLayout.show(mainContent, "Compte");
+        }
+    }
+
+    private void supprimerALire(int index) {
+        int confirm = JOptionPane.showConfirmDialog(this, "Supprimer \"" + aLire.get(index) + "\" ?", "Confirmation", JOptionPane.YES_NO_OPTION);
+        if (confirm == JOptionPane.YES_OPTION) {
+            aLire.remove(index);
+            mainContent.add(createPageCompte(), "Compte");
+            cardLayout.show(mainContent, "Compte");
+        }
+    }
+
+    private void ajouterALire() {
+        String nouveauTitre = JOptionPane.showInputDialog(this, "Nouveau livre à lire :");
+        if (nouveauTitre != null && !nouveauTitre.trim().isEmpty()) {
+            aLire.add(nouveauTitre.trim());
+            mainContent.add(createPageCompte(), "Compte");
+            cardLayout.show(mainContent, "Compte");
+        }
+    }
+
+    private void editerObjectif(int index) {
+        String nouvelObjectif = JOptionPane.showInputDialog(this, "Modifier l'objectif :", objectifs.get(index));
+        if (nouvelObjectif != null && !nouvelObjectif.trim().isEmpty()) {
+            objectifs.set(index, nouvelObjectif.trim());
+            mainContent.add(createPageCompte(), "Compte");
+            cardLayout.show(mainContent, "Compte");
+        }
+    }
+
+    // PAGE DETAILS (inchangée)
+    private JPanel createPageDetails(String titre) {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBackground(fond);
+        JLabel l = new JLabel(titre.toUpperCase(), SwingConstants.CENTER);
+        l.setForeground(acacia);
+        l.setFont(new Font("Serif", Font.BOLD, 30));
+        
+        JPanel bottomPanel = new JPanel(new FlowLayout());
+        bottomPanel.setBackground(fond);
+        
+        JButton back = new JButton("⟵ " + t("retour"));
+        back.setBackground(argile);
+        back.setForeground(Color.WHITE);
+        back.setBorderPainted(false);
+        back.addActionListener(e -> cardLayout.show(mainContent, "Accueil"));
+        
+        JButton save = new JButton(t("sauvegarder"));
+        save.setBackground(ciel);
+        save.setForeground(texteClair);
+        save.setBorderPainted(false);
+        
+        JButton buy = new JButton(t("acheter"));
+        buy.setBackground(argile);
+        buy.setForeground(Color.WHITE);
+        buy.setBorderPainted(false);
+        
+        bottomPanel.add(back);
+        bottomPanel.add(save);
+        bottomPanel.add(buy);
+        
+        p.add(l, BorderLayout.CENTER);
+        p.add(bottomPanel, BorderLayout.SOUTH);
+        return p;
+    }
+
+    private void updateDisplay(String page) {
+        String h = "images/ban_page1_horitentale.png.png"; 
+        String v = "images/ban_page1_verticale.png.png";
+
+        if(page.equals("Catégories")) {
+            h = "images/ban_page3_horizontale.png.png";
+            v = "images/ban_page3_verticale.png.jpg";
+        } else if(page.equals("Compte")) {
+            h = "images/ban_page2_horizentale.png.png"; 
+            v = "images/ban_page2_verticale.png.png";
+        }
+        
+        try {
+            topBanner.setIcon(new ImageIcon(new ImageIcon(h).getImage().getScaledInstance(800, 180, Image.SCALE_SMOOTH)));
+            sideBanner.setIcon(new ImageIcon(new ImageIcon(v).getImage().getScaledInstance(160, 580, Image.SCALE_SMOOTH)));
+        } catch (Exception e) {}
+        
+        cardLayout.show(mainContent, page);
+    }
+
+    private void traduireApplication() {
+        if(langueActuelle.equals("EN")) setTitle("OZAVINO - Universal Library");
+        else if(langueActuelle.equals("ES")) setTitle("OZAVINO - Biblioteca Universal");
+        else setTitle("OZAVINO - Bibliothèque Universelle");
+        
+        Component[] components = ((JPanel)((JPanel)getContentPane().getComponent(0)).getComponent(1)).getComponents();
+        for (Component comp : components) {
+            if (comp instanceof JButton) {
+                JButton btn = (JButton) comp;
+                String text = btn.getText();
+                if (text.equals("Accueil") || text.equals("Home") || text.equals("Inicio")) {
+                    btn.setText(t("accueil"));
+                } else if (text.equals("Compte") || text.equals("Account") || text.equals("Cuenta")) {
+                    btn.setText(t("compte"));
+                } else if (text.equals("Catégories") || text.equals("Categories") || text.equals("Categorías")) {
+                    btn.setText(t("categories"));
+                }
+            }
+        }
+        
+        mainContent.removeAll();
+        mainContent.add(createPageAccueil(), "Accueil");
+        mainContent.add(createPageCategories(), "Catégories");
+        mainContent.add(createPageConnexion(), "Connexion");
+        mainContent.add(createPageCompte(), "Compte");
+        
+        cardLayout.show(mainContent, "Accueil");
+    }
+
+    private void remplirDico() {
+        dico.put("accueil", new String[]{"Accueil", "Home", "Inicio"});
+        dico.put("compte", new String[]{"Compte", "Account", "Cuenta"});
+        dico.put("categories", new String[]{"Catégories", "Categories", "Categorías"});
+        dico.put("nouveautes", new String[]{"Nouveautés", "What's New", "Novedades"});
+        dico.put("recommandations", new String[]{"Recommandations", "Recommended", "Recomendaciones"});
+        dico.put("evenements", new String[]{"Évènements", "Events", "Eventos"});
+        dico.put("livres_recents", new String[]{"Livres récents", "Recent Books", "Libros Recientes"});
+        dico.put("actualite", new String[]{"L'actualité", "News", "Actualidad"});
+        dico.put("disponibilites", new String[]{"Disponibilités", "Availability", "Disponibilidades"});
+        dico.put("auteur_interessant", new String[]{"Auteur intéressant", "Interesting Author", "Autor Interesante"});
+        dico.put("artiste_prometteur", new String[]{"Artiste prometteur", "Promising Artist", "Artista Prometedor"});
+        dico.put("selection_staff", new String[]{"Sélection Staff", "Staff Selection", "Selección Staff"});
+        dico.put("groupes_lecture", new String[]{"Groupes de lecture", "Reading Groups", "Grupos de Lectura"});
+        dico.put("dedicaces", new String[]{"Dédicaces", "Signings", "Dedicatorias"});
+        dico.put("masterclass", new String[]{"Masterclass", "Masterclass", "Masterclass"});
+        dico.put("populaires", new String[]{"Populaires", "Popular", "Populares"});
+        dico.put("connexion_titre", new String[]{"CONNEXION", "LOGIN", "INICIAR SESIÓN"});
+        dico.put("nom_utilisateur", new String[]{"Nom d'utilisateur", "Username", "Nombre de usuario"});
+        dico.put("mot_de_passe", new String[]{"Mot de passe", "Password", "Contraseña"});
+        dico.put("se_connecter", new String[]{"SE CONNECTER", "LOG IN", "INICIAR SESIÓN"});
+        dico.put("entrer_nom", new String[]{"Veuillez entrer un nom", "Please enter a name", "Ingrese un nombre"});
+        dico.put("entrer_mdp", new String[]{"Veuillez entrer un mot de passe", "Please enter a password", "Ingrese una contraseña"});
+        dico.put("bienvenue", new String[]{"Bienvenue", "Welcome", "Bienvenido"});
+        dico.put("non_connecte", new String[]{"Vous n'êtes pas connecté", "Not logged in", "No has iniciado sesión"});
+        dico.put("nom", new String[]{"NOM", "NAME", "NOMBRE"});
+        dico.put("email", new String[]{"EMAIL", "EMAIL", "CORREO"});
+        dico.put("inspirations", new String[]{"INSPIRATIONS", "INSPIRATIONS", "INSPIRACIONES"});
+        dico.put("inspirations_exemple", new String[]{"Littérature, Art, Histoire", "Literature, Art, History", "Literatura, Arte, Historia"});
+        dico.put("lecture_cours", new String[]{"Lecture en cours", "Currently Reading", "Leyendo ahora"});
+        dico.put("a_lire_titre", new String[]{"À lire", "To Read", "Por leer"});
+        dico.put("objectifs_lecture", new String[]{"Objectifs de lecture", "Reading Goals", "Objetivos de lectura"});
+        dico.put("objectif1", new String[]{"Lire 5 livres par mois", "Read 5 books per month", "Leer 5 libros por mes"});
+        dico.put("objectif2", new String[]{"100 livres cette année", "100 books this year", "100 libros este año"});
+        dico.put("objectif3", new String[]{"Lire plus de classiques", "Read more classics", "Leer más clásicos"});
+        dico.put("objectif4", new String[]{"Découvrir de nouveaux auteurs", "Discover new authors", "Descubrir nuevos autores"});
+        dico.put("modifier_infos", new String[]{"MODIFIER MES INFORMATIONS", "EDIT MY INFO", "EDITAR MIS DATOS"});
+        dico.put("modifier_profil", new String[]{"Modifier le profil", "Edit profile", "Editar perfil"});
+        dico.put("ajouter_livre", new String[]{"Ajouter un livre", "Add a book", "Añadir libro"});
+        dico.put("deconnecter", new String[]{"SE DÉCONNECTER", "LOG OUT", "CERRAR SESIÓN"});
+        dico.put("confirm_deconnexion", new String[]{"Voulez-vous vous déconnecter ?", "Do you want to log out?", "¿Quieres cerrar sesión?"});
+        dico.put("deconnexion", new String[]{"Déconnexion", "Logout", "Cerrar sesión"});
+        dico.put("deconnexion_reussie", new String[]{"Déconnexion réussie !", "Logged out successfully!", "¡Sesión cerrada!"});
+        dico.put("entrer_nouveau_nom", new String[]{"Entrez votre nouveau nom :", "Enter your new name:", "Ingrese su nuevo nombre:"});
+        dico.put("modifier_nom", new String[]{"Modifier le nom", "Edit name", "Editar nombre"});
+        dico.put("nom_modifie", new String[]{"Nom modifié avec succès !", "Name changed successfully!", "¡Nombre cambiado!"});
+        dico.put("explorer", new String[]{"EXPLORER", "EXPLORE", "EXPLORAR"});
+        dico.put("retour", new String[]{"RETOUR", "BACK", "VOLVER"});
+        dico.put("langues", new String[]{"Langues", "Languages", "Idiomas"});
+        dico.put("aucun_resultat", new String[]{"Aucun résultat pour", "No results for", "Sin resultados para"});
+        dico.put("erreur_ouverture", new String[]{"Impossible d'ouvrir le lien", "Cannot open link", "No se puede abrir"});
+        dico.put("sauvegarder", new String[]{"Sauvegarder", "Save", "Guardar"});
+        dico.put("acheter", new String[]{"Acheter", "Buy", "Comprar"});
+    }
+
+    private JButton createMenuBtn(String txt, String imgPath, String page) {
+        ImageIcon icon = null;
+        if (!imgPath.isEmpty()) {
+            try {
+                icon = new ImageIcon(new ImageIcon(imgPath).getImage().getScaledInstance(50, 50, Image.SCALE_SMOOTH));
+            } catch (Exception e) {}
+        }
+        JButton b = new JButton(txt, icon);
+        b.setVerticalTextPosition(SwingConstants.BOTTOM);
+        b.setHorizontalTextPosition(SwingConstants.CENTER);
+        b.setFont(new Font("Serif", Font.PLAIN, 12));
+        b.setForeground(texteClair);
+        b.setContentAreaFilled(false);
+        b.setBorderPainted(false);
+        b.addActionListener(e -> updateDisplay(page));
+        return b;
+    }
+
+    private String t(String cle) {
+        int i = langueActuelle.equals("FR") ? 0 : (langueActuelle.equals("EN") ? 1 : 2);
+        return dico.getOrDefault(cle, new String[]{cle, cle, cle})[i];
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new OzavinoApp().setVisible(true));
+    }
+}
